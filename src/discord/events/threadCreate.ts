@@ -20,10 +20,31 @@ export function registerThreadCreate(
 ): void {
   client.on(Events.ThreadCreate, async (thread: AnyThreadChannel, newly) => {
     if (!newly) return;
-    if (thread.parentId !== config.discord.forumChannelId) return;
-    if (thread.type !== ChannelType.PublicThread) return;
+    if (thread.parentId !== config.discord.forumChannelId) {
+      logger.warn(
+        {
+          threadId: thread.id,
+          parentId: thread.parentId,
+          expectedParentId: config.discord.forumChannelId,
+        },
+        "ThreadCreate ignored: parentId does not match DISCORD_FORUM_CHANNEL_ID",
+      );
+      return;
+    }
+    if (thread.type !== ChannelType.PublicThread) {
+      logger.warn(
+        { threadId: thread.id, threadType: thread.type },
+        "ThreadCreate ignored: only PublicThread is supported",
+      );
+      return;
+    }
 
     try {
+      logger.info(
+        { threadId: thread.id, parentId: thread.parentId },
+        "Creating GitHub issue from Discord thread",
+      );
+
       const starterMessage = await thread.fetchStarterMessage();
       if (!starterMessage) {
         logger.warn({ threadId: thread.id }, "No starter message found");
@@ -62,7 +83,14 @@ export function registerThreadCreate(
         "Thread linked to issue",
       );
     } catch (err) {
-      logger.error(err, "Failed to create issue from thread");
+      logger.error(
+        {
+          err,
+          threadId: thread.id,
+          parentId: thread.parentId,
+        },
+        "Failed to create issue from thread",
+      );
       await thread
         .send("Failed to create GitHub issue. Please try again later.")
         .catch(() => {});
