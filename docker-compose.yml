@@ -1,0 +1,19 @@
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.discord-bridge.rule=Host(`bridge.example.com`)"
+      - "traefik.http.routers.discord-bridge.entrypoints=websecure"
+      - "traefik.http.routers.discord-bridge.tls.certresolver=letsencrypt"
+      - "traefik.http.services.discord-bridge.loadbalancer.server.port=3000"
+    networks:
+      - traefik
+
+networks:
+  traefik:
+    external: true
