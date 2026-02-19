@@ -18,6 +18,15 @@ export function initDatabase(): Database.Database {
     )
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS message_comment_map (
+      discord_message_id TEXT PRIMARY KEY,
+      github_comment_id INTEGER NOT NULL,
+      thread_id TEXT NOT NULL,
+      issue_number INTEGER NOT NULL
+    )
+  `);
+
   logger.info("Database initialized");
   return db;
 }

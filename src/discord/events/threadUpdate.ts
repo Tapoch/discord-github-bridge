@@ -4,7 +4,7 @@ import { config } from "../../config.js";
 import type { GitHubApp } from "../../github/app.js";
 import { closeIssue } from "../../github/issues.js";
 import { getIssueByThread } from "../../storage/mappings.js";
-import { addMarker } from "../../utils/echoGuard.js";
+import { addMarker, isBotAction } from "../../utils/echoGuard.js";
 import { logger } from "../../utils/logger.js";
 
 export function registerThreadUpdate(
@@ -17,6 +17,9 @@ export function registerThreadUpdate(
     async (_old: AnyThreadChannel, thread: AnyThreadChannel) => {
       if (thread.parentId !== config.discord.forumChannelId) return;
       if (!thread.archived) return;
+
+      // Skip if this archive was initiated by the bot (from GitHub webhook)
+      if (isBotAction(thread.id)) return;
 
       const issueNumber = getIssueByThread(db, thread.id);
       if (!issueNumber) return;

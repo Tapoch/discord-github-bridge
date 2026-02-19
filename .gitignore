@@ -4,3 +4,4 @@ data/
 .env
 docker-compose.yml
 *.pem
+sing-box.json

@@ -10,12 +10,21 @@ Discord Forum Channel               GitHub Repository
  | New post        | ─── creates ──> | New issue       |
  | Message in      | ─── creates ──> | Comment on      |
  |   thread        |                 |   issue         |
+ | Edit message    | ─── edits ────> | Comment edited  |
+ | Delete message  | ─── deletes ──> | Comment deleted |
+ | Edit first msg  | ─── updates ──> | Issue body      |
  | Thread archived | ─── closes ───> | Issue closed    |
  |                 |                 |                 |
- | Notification    | <── webhook ─── | Comment added   |
- | Notification    | <── webhook ─── | Issue closed    |
- | Notification    | <── webhook ─── | Label changed   |
+ | Thread archived | <── webhook ─── | Issue closed    |
+ | Thread opened   | <── webhook ─── | Issue reopened  |
+ | Thread renamed  | <── webhook ─── | Issue renamed   |
+ | Tags updated    | <── webhook ─── | Labels changed  |
+ | Embed message   | <── webhook ─── | Comment added   |
+ | Embed edited    | <── webhook ─── | Comment edited  |
+ | Message deleted | <── webhook ─── | Comment deleted |
  | Notification    | <── webhook ─── | Assignee set    |
+ | Notification    | <── webhook ─── | Milestone set   |
+ | Notification    | <── webhook ─── | PR references   |
  +-----------------+                 +-----------------+
 ```
 
@@ -24,18 +33,28 @@ Discord Forum Channel               GitHub Repository
 ### Discord to GitHub
 
 - **Auto-create issues** — new forum post becomes a GitHub issue
-- **Tag to label mapping** — forum tags (bug, feature...) map to GitHub labels
+- **Tag to label mapping** — forum tags (bug, feature...) map to GitHub labels by name
 - **Message sync** — thread messages become issue comments (with author name)
+- **Message edit sync** — editing a message in thread edits the linked GitHub comment
+- **Message delete sync** — deleting a message in thread deletes the linked GitHub comment
+- **Starter message edit** — editing the first post updates the issue body
 - **Attachments** — images and files are embedded as markdown links
 - **Auto-close** — archiving a thread closes the linked issue
 
 ### GitHub to Discord
 
 - **Comments** — new issue comments appear as embeds in the thread (with avatar, link, timestamp)
-- **Issue closed/reopened** — notification in thread
-- **Labels** — added/removed label notification
+- **Comment edited** — editing a comment on GitHub edits the corresponding Discord embed
+- **Comment deleted** — deleting a comment on GitHub deletes the corresponding Discord message
+- **Issue closed** — notification in thread + thread is archived
+- **Issue reopened** — notification in thread + thread is unarchived
+- **Issue renamed** — thread name updates to match the new issue title
+- **Labels synced** — adding/removing labels on an issue updates the forum tags on the thread
 - **Assignees** — assigned/unassigned notification
+- **Milestones** — notification when issue is added/removed from a milestone
+- **Pull Requests** — notification when a PR references the issue (`Fixes #123`, `Closes #123`, `Resolves #123`), including opened/merged/closed status
 - **Webhook verification** — `x-hub-signature-256` validated via secret
+- **Echo guard** — prevents infinite loops (bot won't react to its own actions)
 
 ### Slash Commands
 
@@ -47,14 +66,14 @@ Discord Forum Channel               GitHub Repository
 
 ### Infrastructure
 
-- **SQLite** with WAL mode for thread-to-issue mapping (persisted via Docker volume)
+- **SQLite** with WAL mode for thread-to-issue and message-to-comment mappings (persisted via Docker volume)
 - **GitHub App** auth with automatic token refresh
 - **Fastify** webhook server with `/health` endpoint
 - **Pino** structured logging
 - **Graceful shutdown** on SIGINT/SIGTERM
 - **Docker** multi-stage build with tini
 - **Traefik** labels for automatic HTTPS via Let's Encrypt
-- **Echo guard** prevents message loops between Discord and GitHub
+- **Echo guard** prevents message loops between Discord and GitHub (HTML markers + in-memory action tracking)
 
 ## Tech Stack
 
@@ -73,7 +92,7 @@ Discord Forum Channel               GitHub Repository
 2. Create a new application
 3. Go to **Bot** tab, enable **Message Content Intent**
 4. Go to **OAuth2** tab, select scopes: `bot`, `applications.commands`
-5. Bot permissions: Send Messages, Read Message History, Manage Threads, Use Slash Commands
+5. Bot permissions: Send Messages, Read Message History, Manage Threads, Manage Messages, Use Slash Commands
 6. Copy the invite URL and add the bot to your server
 7. Copy the **Bot Token**
 
@@ -83,7 +102,8 @@ Discord Forum Channel               GitHub Repository
 2. Set permissions:
    - **Issues**: Read & Write
    - **Metadata**: Read-only
-3. Subscribe to webhook events: `issues`, `issue_comment`
+   - **Pull Requests**: Read-only
+3. Subscribe to webhook events: `issues`, `issue_comment`, `pull_request`
 4. Set **Webhook URL** to `https://your-domain.com/api/webhooks/github`
 5. Set a **Webhook secret** (save it)
 6. After creation, note the **App ID**
@@ -135,12 +155,22 @@ npm run dev
 **Docker:**
 
 ```bash
+cp docker-compose.yml.example docker-compose.yml
+# Edit docker-compose.yml: set your domain and Traefik network name
 docker compose up -d --build
 ```
 
-Before deploying, update `docker-compose.yml`:
-- Replace `bridge.example.com` with your domain
-- Adjust the Traefik network name if needed
+### 5. Forum Tags Setup
+
+Create tags in your Discord forum channel that match GitHub labels by name:
+
+| Discord Tag | GitHub Label |
+|-------------|-------------|
+| bug         | bug         |
+| enhancement | enhancement |
+| question    | question    |
+
+Tags and labels are matched **case-insensitively** by name. When a label is added/removed on GitHub, the matching forum tag is automatically applied/removed on the Discord thread (max 5 tags).
 
 ## Project Structure
 
@@ -154,6 +184,8 @@ src/
 │   │   ├── index.ts            # Event registration
 │   │   ├── threadCreate.ts     # Forum post -> GitHub issue
 │   │   ├── messageCreate.ts    # Thread message -> issue comment
+│   │   ├── messageUpdate.ts    # Message edit -> comment edit / issue body
+│   │   ├── messageDelete.ts    # Message delete -> comment delete
 │   │   └── threadUpdate.ts     # Thread archived -> close issue
 │   └── commands/
 │       ├── register.ts         # Slash command registration
@@ -162,17 +194,18 @@ src/
 │       └── syncStatus.ts       # /sync-status
 ├── github/
 │   ├── app.ts                  # GitHub App auth + token refresh
-│   ├── issues.ts               # Issues API (create, close, comment, get)
+│   ├── issues.ts               # Issues API (create, close, comment, edit, delete, get)
 │   ├── webhooks.ts             # Fastify server for GitHub webhooks
 │   └── handlers/
-│       ├── issueHandler.ts     # Issue events -> Discord notifications
-│       └── commentHandler.ts   # Comment events -> Discord embeds
+│       ├── issueHandler.ts     # Issue events -> Discord (archive, rename, tags, milestone)
+│       ├── commentHandler.ts   # Comment events -> Discord (create, edit, delete)
+│       └── pullRequestHandler.ts  # PR events -> Discord notifications
 ├── storage/
-│   ├── database.ts             # SQLite initialization
-│   └── mappings.ts             # Thread <-> Issue mapping CRUD
+│   ├── database.ts             # SQLite initialization (2 tables)
+│   └── mappings.ts             # Thread <-> Issue + Message <-> Comment CRUD
 └── utils/
     ├── logger.ts               # Pino logger
-    ├── echoGuard.ts            # Loop prevention markers
+    ├── echoGuard.ts            # Loop prevention (markers + in-memory guard)
     └── attachments.ts          # Discord attachments to markdown
 ```
 

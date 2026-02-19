@@ -42,10 +42,46 @@ export async function addComment(
   github: GitHubApp,
   issueNumber: number,
   body: string,
+): Promise<{ id: number }> {
+  const octokit = await github.getOctokit();
+  const { data } = await octokit.request(
+    "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+    { owner, repo, issue_number: issueNumber, body },
+  );
+  return { id: data.id };
+}
+
+export async function editComment(
+  github: GitHubApp,
+  commentId: number,
+  body: string,
 ): Promise<void> {
   const octokit = await github.getOctokit();
   await octokit.request(
-    "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+    "PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}",
+    { owner, repo, comment_id: commentId, body },
+  );
+}
+
+export async function deleteComment(
+  github: GitHubApp,
+  commentId: number,
+): Promise<void> {
+  const octokit = await github.getOctokit();
+  await octokit.request(
+    "DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}",
+    { owner, repo, comment_id: commentId },
+  );
+}
+
+export async function updateIssueBody(
+  github: GitHubApp,
+  issueNumber: number,
+  body: string,
+): Promise<void> {
+  const octokit = await github.getOctokit();
+  await octokit.request(
+    "PATCH /repos/{owner}/{repo}/issues/{issue_number}",
     { owner, repo, issue_number: issueNumber, body },
   );
 }

@@ -6,6 +6,7 @@ import { config } from "../config.js";
 import type { GitHubApp } from "./app.js";
 import { handleIssueEvent } from "./handlers/issueHandler.js";
 import { handleCommentEvent } from "./handlers/commentHandler.js";
+import { handlePullRequestEvent } from "./handlers/pullRequestHandler.js";
 import { logger } from "../utils/logger.js";
 
 export async function startWebhookServer(
@@ -23,6 +24,10 @@ export async function startWebhookServer(
 
   webhooks.on("issue_comment", async ({ payload }) => {
     await handleCommentEvent(payload as any, discord, db);
+  });
+
+  webhooks.on("pull_request", async ({ payload }) => {
+    await handlePullRequestEvent(payload as any, discord, db);
   });
 
   fastify.get("/health", async () => ({ status: "ok" }));

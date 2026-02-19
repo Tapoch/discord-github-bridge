@@ -3,7 +3,10 @@ import type Database from "better-sqlite3";
 import { config } from "../../config.js";
 import type { GitHubApp } from "../../github/app.js";
 import { addComment } from "../../github/issues.js";
-import { getIssueByThread } from "../../storage/mappings.js";
+import {
+  getIssueByThread,
+  linkMessageToComment,
+} from "../../storage/mappings.js";
 import { addMarker } from "../../utils/echoGuard.js";
 import { formatAttachments } from "../../utils/attachments.js";
 import { logger } from "../../utils/logger.js";
@@ -35,10 +38,11 @@ export function registerMessageCreate(
         (message.content || "") +
         formatAttachments(message.attachments);
 
-      await addComment(github, issueNumber, addMarker(body));
+      const comment = await addComment(github, issueNumber, addMarker(body));
+      linkMessageToComment(db, message.id, comment.id, channel.id, issueNumber);
 
       logger.info(
-        { threadId: channel.id, issueNumber },
+        { threadId: channel.id, issueNumber, commentId: comment.id },
         "Synced Discord message to GitHub comment",
       );
     } catch (err) {
