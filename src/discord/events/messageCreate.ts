@@ -1,4 +1,10 @@
-import { type Client, type Message, ChannelType, Events } from "discord.js";
+import {
+  type Client,
+  type Message,
+  ChannelType,
+  Events,
+  MessageType,
+} from "discord.js";
 import type Database from "better-sqlite3";
 import { config } from "../../config.js";
 import type { GitHubApp } from "../../github/app.js";
@@ -19,6 +25,13 @@ export function registerMessageCreate(
   client.on(Events.MessageCreate, async (message: Message) => {
     // Ignore bot messages (echo guard)
     if (message.author.bot) return;
+    if (message.system) return;
+    if (
+      message.type !== MessageType.Default &&
+      message.type !== MessageType.Reply
+    ) {
+      return;
+    }
 
     // Only handle messages in threads
     const channel = message.channel;

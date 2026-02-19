@@ -134,6 +134,8 @@ async function renameThread(
   if (!isThread(thread)) return;
   if (thread.name === newTitle) return;
   try {
+    // Prevent Discord->GitHub rename echo loop for bot-initiated thread rename.
+    markBotAction(thread.id);
     await thread.setName(newTitle);
     logger.info(
       { threadId: thread.id, newTitle },

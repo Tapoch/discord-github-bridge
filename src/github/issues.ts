@@ -86,6 +86,18 @@ export async function updateIssueBody(
   );
 }
 
+export async function updateIssueTitle(
+  github: GitHubApp,
+  issueNumber: number,
+  title: string,
+): Promise<void> {
+  const octokit = await github.getOctokit();
+  await octokit.request(
+    "PATCH /repos/{owner}/{repo}/issues/{issue_number}",
+    { owner, repo, issue_number: issueNumber, title },
+  );
+}
+
 export async function getIssue(
   github: GitHubApp,
   issueNumber: number,
