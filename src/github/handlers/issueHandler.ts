@@ -39,11 +39,12 @@ export async function handleIssueEvent(
 
   const sender = event.sender.login;
   let message: string | null = null;
+  let archiveAfterMessage = false;
 
   switch (event.action) {
     case "closed":
       message = `Issue [#${event.issue.number}](${event.issue.html_url}) closed by **${sender}**`;
-      await archiveThread(thread, threadId);
+      archiveAfterMessage = true;
       break;
     case "reopened":
       message = `Issue [#${event.issue.number}](${event.issue.html_url}) reopened by **${sender}**`;
@@ -88,6 +89,11 @@ export async function handleIssueEvent(
       { issueNumber: event.issue.number, action: event.action },
       "Synced issue event to Discord",
     );
+  }
+
+  // Sending a message to an archived thread can auto-unarchive it, so archive after notification.
+  if (archiveAfterMessage) {
+    await archiveThread(thread, threadId);
   }
 }
 
